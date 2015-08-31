@@ -717,3 +717,11 @@ void vpx_idct32x32_1024_add_neon(
     }
     return;
 }
+
+// Need to add 34 eob idct32x32 neon implementation.
+void vpx_idct32x32_34_add_neon(
+        int16_t *input,
+        uint8_t *dest,
+        int stride) {
+    vpx_idct32x32_1024_add_neon(input, dest, stride);
+}
