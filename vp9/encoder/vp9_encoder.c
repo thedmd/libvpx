@@ -17,6 +17,7 @@
 #include "./vpx_dsp_rtcd.h"
 #include "./vpx_scale_rtcd.h"
 #include "vpx/internal/vpx_psnr.h"
+#include "vpx_dsp/vpx_dsp_common.h"
 #include "vpx_dsp/vpx_filter.h"
 #if CONFIG_INTERNAL_STATS
 #include "vpx_dsp/ssim.h"
@@ -1452,6 +1453,8 @@ static void realloc_segmentation_maps(VP9_COMP *cpi) {
 void vp9_change_config(struct VP9_COMP *cpi, const VP9EncoderConfig *oxcf) {
   VP9_COMMON *const cm = &cpi->common;
   RATE_CONTROL *const rc = &cpi->rc;
+  int last_w = cpi->oxcf.width;
+  int last_h = cpi->oxcf.height;
 
   if (cm->profile != oxcf->profile)
     cm->profile = oxcf->profile;
@@ -1504,8 +1507,10 @@ void vp9_change_config(struct VP9_COMP *cpi, const VP9EncoderConfig *oxcf) {
 
   cm->display_width = cpi->oxcf.width;
   cm->display_height = cpi->oxcf.height;
-  cm->width = cpi->oxcf.width;
-  cm->height = cpi->oxcf.height;
+  if (last_w != cpi->oxcf.width || last_h != cpi->oxcf.height) {
+    cm->width = cpi->oxcf.width;
+    cm->height = cpi->oxcf.height;
+  }
 
   if (cpi->initial_width) {
     if (cm->width > cpi->initial_width || cm->height > cpi->initial_height) {
@@ -2247,42 +2252,6 @@ typedef struct {
   uint32_t samples[4];  // total/y/u/v
 } PSNR_STATS;
 
-static void calc_psnr(const YV12_BUFFER_CONFIG *a, const YV12_BUFFER_CONFIG *b,
-                      PSNR_STATS *psnr) {
-  static const double peak = 255.0;
-  const int widths[3]        = {
-      a->y_crop_width, a->uv_crop_width, a->uv_crop_width};
-  const int heights[3]       = {
-      a->y_crop_height, a->uv_crop_height, a->uv_crop_height};
-  const uint8_t *a_planes[3] = {a->y_buffer, a->u_buffer, a->v_buffer};
-  const int a_strides[3]     = {a->y_stride, a->uv_stride, a->uv_stride};
-  const uint8_t *b_planes[3] = {b->y_buffer, b->u_buffer, b->v_buffer};
-  const int b_strides[3]     = {b->y_stride, b->uv_stride, b->uv_stride};
-  int i;
-  uint64_t total_sse = 0;
-  uint32_t total_samples = 0;
-
-  for (i = 0; i < 3; ++i) {
-    const int w = widths[i];
-    const int h = heights[i];
-    const uint32_t samples = w * h;
-    const uint64_t sse = get_sse(a_planes[i], a_strides[i],
-                                 b_planes[i], b_strides[i],
-                                 w, h);
-    psnr->sse[1 + i] = sse;
-    psnr->samples[1 + i] = samples;
-    psnr->psnr[1 + i] = vpx_sse_to_psnr(samples, peak, (double)sse);
-
-    total_sse += sse;
-    total_samples += samples;
-  }
-
-  psnr->sse[0] = total_sse;
-  psnr->samples[0] = total_samples;
-  psnr->psnr[0] = vpx_sse_to_psnr((double)total_samples, peak,
-                                  (double)total_sse);
-}
-
 #if CONFIG_VP9_HIGHBITDEPTH
 static void calc_highbd_psnr(const YV12_BUFFER_CONFIG *a,
                              const YV12_BUFFER_CONFIG *b,
@@ -2322,6 +2291,44 @@ static void calc_highbd_psnr(const YV12_BUFFER_CONFIG *a,
                     b_planes[i], b_strides[i],
                     w, h);
     }
+    psnr->sse[1 + i] = sse;
+    psnr->samples[1 + i] = samples;
+    psnr->psnr[1 + i] = vpx_sse_to_psnr(samples, peak, (double)sse);
+
+    total_sse += sse;
+    total_samples += samples;
+  }
+
+  psnr->sse[0] = total_sse;
+  psnr->samples[0] = total_samples;
+  psnr->psnr[0] = vpx_sse_to_psnr((double)total_samples, peak,
+                                  (double)total_sse);
+}
+
+#else  // !CONFIG_VP9_HIGHBITDEPTH
+
+static void calc_psnr(const YV12_BUFFER_CONFIG *a, const YV12_BUFFER_CONFIG *b,
+                      PSNR_STATS *psnr) {
+  static const double peak = 255.0;
+  const int widths[3]        = {
+      a->y_crop_width, a->uv_crop_width, a->uv_crop_width};
+  const int heights[3]       = {
+      a->y_crop_height, a->uv_crop_height, a->uv_crop_height};
+  const uint8_t *a_planes[3] = {a->y_buffer, a->u_buffer, a->v_buffer};
+  const int a_strides[3]     = {a->y_stride, a->uv_stride, a->uv_stride};
+  const uint8_t *b_planes[3] = {b->y_buffer, b->u_buffer, b->v_buffer};
+  const int b_strides[3]     = {b->y_stride, b->uv_stride, b->uv_stride};
+  int i;
+  uint64_t total_sse = 0;
+  uint32_t total_samples = 0;
+
+  for (i = 0; i < 3; ++i) {
+    const int w = widths[i];
+    const int h = heights[i];
+    const uint32_t samples = w * h;
+    const uint64_t sse = get_sse(a_planes[i], a_strides[i],
+                                 b_planes[i], b_strides[i],
+                                 w, h);
     psnr->sse[1 + i] = sse;
     psnr->samples[1 + i] = samples;
     psnr->psnr[1 + i] = vpx_sse_to_psnr(samples, peak, (double)sse);

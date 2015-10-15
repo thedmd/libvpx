@@ -25,6 +25,7 @@
 #include "vpx_dsp/variance.h"
 #include "mcomp.h"
 #include "rdopt.h"
+#include "vpx_dsp/vpx_dsp_common.h"
 #include "vpx_mem/vpx_mem.h"
 #if CONFIG_TEMPORAL_DENOISING
 #include "denoising.h"
@@ -833,7 +834,7 @@ void vp8_pick_inter_mode(VP8_COMP *cpi, MACROBLOCK *x, int recon_yoffset,
     if (cpi->oxcf.noise_sensitivity) {
       // Under aggressive denoising mode, should we use skin map to reduce denoiser
       // and ZEROMV bias? Will need to revisit the accuracy of this detection for
-      // very noisy input. For now keep this as is (i.e., don't turn it off). 
+      // very noisy input. For now keep this as is (i.e., don't turn it off).
       // if (cpi->denoiser.denoiser_mode == kDenoiserOnYUVAggressive)
       //   x->is_skin = 0;
     }
@@ -883,7 +884,7 @@ void vp8_pick_inter_mode(VP8_COMP *cpi, MACROBLOCK *x, int recon_yoffset,
 
     /* If the frame has big static background and current MB is in low
     *  motion area, its mode decision is biased to ZEROMV mode.
-    *  No adjustment if cpu_used is <= -12 (i.e., cpi->Speed >= 12). 
+    *  No adjustment if cpu_used is <= -12 (i.e., cpi->Speed >= 12).
     *  At such speed settings, ZEROMV is already heavily favored.
     */
     if (cpi->Speed < 12) {

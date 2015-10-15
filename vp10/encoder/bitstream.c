@@ -14,6 +14,7 @@
 
 #include "vpx/vpx_encoder.h"
 #include "vpx_dsp/bitwriter_buffer.h"
+#include "vpx_dsp/vpx_dsp_common.h"
 #include "vpx_mem/vpx_mem.h"
 #include "vpx_ports/mem_ops.h"
 #include "vpx_ports/system_state.h"
@@ -761,7 +762,11 @@ static void encode_segmentation(VP10_COMMON *cm, MACROBLOCKD *xd,
     return;
 
   // Segmentation map
-  vpx_wb_write_bit(wb, seg->update_map);
+  if (!frame_is_intra_only(cm) && !cm->error_resilient_mode) {
+    vpx_wb_write_bit(wb, seg->update_map);
+  } else {
+    assert(seg->update_map == 1);
+  }
   if (seg->update_map) {
     // Select the coding strategy (temporal or spatial)
     vp10_choose_segmap_coding_method(cm, xd);
@@ -775,7 +780,11 @@ static void encode_segmentation(VP10_COMMON *cm, MACROBLOCKD *xd,
     }
 
     // Write out the chosen coding method.
-    vpx_wb_write_bit(wb, seg->temporal_update);
+    if (!frame_is_intra_only(cm) && !cm->error_resilient_mode) {
+      vpx_wb_write_bit(wb, seg->temporal_update);
+    } else {
+      assert(seg->temporal_update == 0);
+    }
     if (seg->temporal_update) {
       for (i = 0; i < PREDICTION_PROBS; i++) {
         const int prob = seg->pred_probs[i];
@@ -851,11 +860,9 @@ static void encode_txfm_probs(VP10_COMMON *cm, vpx_writer *w,
 
 static void write_interp_filter(INTERP_FILTER filter,
                                 struct vpx_write_bit_buffer *wb) {
-  const int filter_to_literal[] = { 1, 0, 2, 3 };
-
   vpx_wb_write_bit(wb, filter == SWITCHABLE);
   if (filter != SWITCHABLE)
-    vpx_wb_write_literal(wb, filter_to_literal[filter], 2);
+    vpx_wb_write_literal(wb, filter, 2);
 }
 
 static void fix_interp_filter(VP10_COMMON *cm, FRAME_COUNTS *counts) {
